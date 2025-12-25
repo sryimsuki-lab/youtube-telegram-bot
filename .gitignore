@@ -1,0 +1,14 @@
+.DS_Store
+temp_downloads/
+speed_test/
+*.mp3
+*.pyc
+__pycache__/
+.env
+venv/
+.venv/
+*.log
+cookies.txt
+nanobanana-output/
+Prompt.txt
+AGENTS.md

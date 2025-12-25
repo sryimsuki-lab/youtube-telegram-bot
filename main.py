@@ -143,10 +143,25 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
                 continue
 
             title = entry['title']
-            file_path = f"{temp_dir}/{title}.mp3"
 
-            if not os.path.exists(file_path):
-                logger.warning(f"File not found: {file_path}")
+            # Find the actual MP3 file (title might have sanitized characters)
+            import glob
+            possible_files = glob.glob(f"{temp_dir}/*.mp3")
+            file_path = None
+
+            # Try exact match first
+            exact_path = f"{temp_dir}/{title}.mp3"
+            if os.path.exists(exact_path):
+                file_path = exact_path
+            # Otherwise, find the most recent MP3 file
+            elif possible_files:
+                file_path = max(possible_files, key=os.path.getmtime)
+                logger.info(f"Using file: {file_path} for title: {title}")
+
+            if not file_path or not os.path.exists(file_path):
+                logger.error(f"File not found for title: {title}")
+                logger.error(f"Directory contents: {os.listdir(temp_dir)}")
+                await progress_msg.edit_text(f"❌ Error: MP3 file not found after conversion. Please try again.")
                 continue
 
             performer = entry.get('uploader') or entry.get('channel') or 'Unknown Artist'
@@ -168,15 +183,20 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
             else:
                 await progress_msg.edit_text("⏫ Uploading MP3...")
 
-            with open(file_path, 'rb') as audio:
-                await update.message.reply_audio(
-                    audio=audio,
-                    title=title,
-                    performer=performer,
-                    duration=duration,
-                    thumbnail=thumbnail_data if thumbnail_data else None,
-                    filename=f"{title}.mp3"
-                )
+            try:
+                with open(file_path, 'rb') as audio:
+                    await update.message.reply_audio(
+                        audio=audio,
+                        title=title,
+                        performer=performer,
+                        duration=duration,
+                        thumbnail=thumbnail_data if thumbnail_data else None,
+                        filename=f"{title}.mp3"
+                    )
+            except Exception as upload_error:
+                logger.error(f"Upload failed: {upload_error}")
+                await progress_msg.edit_text(f"❌ Error uploading MP3: {str(upload_error)}")
+                continue
 
             os.remove(file_path)
 

@@ -85,8 +85,6 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
             'writethumbnail': True,
             'noplaylist': True,
             'progress_hooks': [progress_hook],
-            'cookiesfrombrowser': ('chrome',),
-            'js_runtimes': {'node': {'cmd': shutil.which('node')}},
             'concurrent_fragment_downloads': 16,
             'http_chunk_size': 20971520,
             'buffersize': 16384,

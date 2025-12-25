@@ -35,6 +35,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🎧 SoundCloud tracks → MP3\n"
         "🎵 Spotify tracks → MP3 (limited)\n"
         "🖼️ Beautiful album art included!\n"
+        "📊 Real-time download progress\n"
         "⚡ Lightning-fast downloads (128kbps)\n\n"
         "💡 How to use:\n"
         "Just paste any music link and watch the magic happen! 🪄\n\n"
@@ -63,8 +64,33 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
 
     progress_msg = await update.message.reply_text("⏬ Starting download...")
 
+    progress_data = {'percent': 0, 'status': 'downloading'}
+
     def progress_hook(d):
-        pass
+        if d['status'] == 'downloading':
+            if 'downloaded_bytes' in d and 'total_bytes' in d:
+                progress_data['percent'] = (d['downloaded_bytes'] / d['total_bytes']) * 100
+            elif 'downloaded_bytes' in d and 'total_bytes_estimate' in d:
+                progress_data['percent'] = (d['downloaded_bytes'] / d['total_bytes_estimate']) * 100
+        elif d['status'] == 'finished':
+            progress_data['status'] = 'converting'
+
+    async def update_progress():
+        last_percent = -10
+        while progress_data['status'] not in ['done', 'error']:
+            current_percent = int(progress_data['percent'])
+            if current_percent - last_percent >= 10:
+                try:
+                    if progress_data['status'] == 'downloading':
+                        await progress_msg.edit_text(f"⏬ Downloading: {current_percent}%")
+                    elif progress_data['status'] == 'converting':
+                        await progress_msg.edit_text("🔄 Converting to MP3...")
+                    last_percent = current_percent
+                except:
+                    pass
+            await asyncio.sleep(1)
+
+    update_task = asyncio.create_task(update_progress())
 
     try:
         temp_dir = 'temp_downloads'
@@ -91,8 +117,15 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
             'fragment_retries': 10,
         }
 
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(message, download=True)
+        def download():
+            with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+                return ydl.extract_info(message, download=True)
+
+        loop = asyncio.get_event_loop()
+        info = await loop.run_in_executor(None, download)
+
+        progress_data['status'] = 'done'
+        update_task.cancel()
 
         entries = info.get('entries', [info])
 
@@ -151,6 +184,8 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
         await progress_msg.edit_text(f"✅ Done! Sent {len(entries)} track(s)! 🎧")
 
     except Exception as e:
+        progress_data['status'] = 'error'
+        update_task.cancel()
         logger.error(f"Error: {str(e)}")
 
         error_msg = "❌ "

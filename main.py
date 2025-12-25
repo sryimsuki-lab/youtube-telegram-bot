@@ -76,19 +76,25 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
             progress_data['status'] = 'converting'
 
     async def update_progress():
-        last_percent = -10
+        last_percent = 0
+        last_update_time = 0
         while progress_data['status'] not in ['done', 'error']:
             current_percent = int(progress_data['percent'])
-            if current_percent - last_percent >= 10:
+            current_time = asyncio.get_event_loop().time()
+
+            # Update if 5% change OR 2 seconds passed
+            if (current_percent - last_percent >= 5) or (current_time - last_update_time >= 2 and current_percent > last_percent):
                 try:
-                    if progress_data['status'] == 'downloading':
+                    if progress_data['status'] == 'downloading' and current_percent > 0:
                         await progress_msg.edit_text(f"⏬ Downloading: {current_percent}%")
+                        last_percent = current_percent
+                        last_update_time = current_time
                     elif progress_data['status'] == 'converting':
                         await progress_msg.edit_text("🔄 Converting to MP3...")
-                    last_percent = current_percent
+                        last_update_time = current_time
                 except:
                     pass
-            await asyncio.sleep(1)
+            await asyncio.sleep(0.5)
 
     update_task = asyncio.create_task(update_progress())
 
@@ -110,8 +116,8 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
             'writethumbnail': True,
             'noplaylist': True,
             'progress_hooks': [progress_hook],
-            'concurrent_fragment_downloads': 16,
-            'http_chunk_size': 20971520,
+            'concurrent_fragment_downloads': 4,
+            'http_chunk_size': 10485760,
             'buffersize': 16384,
             'retries': 10,
             'fragment_retries': 10,

@@ -167,16 +167,35 @@ async def download_and_convert(update: Update, context: ContextTypes.DEFAULT_TYP
             performer = entry.get('uploader') or entry.get('channel') or 'Unknown Artist'
             duration = int(entry.get('duration', 0))
 
-            thumbnail_url = entry.get('thumbnail')
+            # Find thumbnail file (yt-dlp downloads it with same name as video)
             thumbnail_data = None
+            base_path = file_path.replace('.mp3', '')
 
-            if thumbnail_url:
-                try:
-                    response = requests.get(thumbnail_url, timeout=10)
-                    if response.status_code == 200:
-                        thumbnail_data = BytesIO(response.content)
-                except:
-                    pass
+            # Try with exact base path first
+            for ext in ['.jpg', '.png', '.webp']:
+                thumb_path = f"{base_path}{ext}"
+                if os.path.exists(thumb_path):
+                    try:
+                        with open(thumb_path, 'rb') as thumb_file:
+                            thumbnail_data = BytesIO(thumb_file.read())
+                        logger.info(f"Found thumbnail: {thumb_path}")
+                        break
+                    except Exception as e:
+                        logger.error(f"Failed to read thumbnail: {e}")
+
+            # If not found, try to find any recent thumbnail file
+            if not thumbnail_data:
+                for ext in ['.jpg', '.png', '.webp']:
+                    thumb_files = glob.glob(f"{temp_dir}/*{ext}")
+                    if thumb_files:
+                        latest_thumb = max(thumb_files, key=os.path.getmtime)
+                        try:
+                            with open(latest_thumb, 'rb') as thumb_file:
+                                thumbnail_data = BytesIO(thumb_file.read())
+                            logger.info(f"Using recent thumbnail: {latest_thumb}")
+                            break
+                        except Exception as e:
+                            logger.error(f"Failed to read thumbnail: {e}")
 
             if len(entries) > 1:
                 await progress_msg.edit_text(f"⏫ Uploading {idx}/{len(entries)}: {title[:30]}...")
